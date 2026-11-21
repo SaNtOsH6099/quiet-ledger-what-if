@@ -93,6 +93,11 @@ async function waitForPort(tries = 60) {
     const { sessionId: sid } = await send('Target.attachToTarget', { targetId, flatten: true });
     sessionId = sid;
     await send('Page.enable', {}, sessionId);
+    // Force the viewport to exactly 1080x1920. Full Chrome (unlike
+    // chrome-headless-shell) reserves ~87px of the window for its own UI,
+    // so --window-size alone yields a 1080x1833 viewport and a cropped
+    // screenshot. The override makes the viewport independent of the window.
+    await send('Emulation.setDeviceMetricsOverride', { width: 1080, height: 1920, deviceScaleFactor: 1, mobile: false }, sessionId);
     for (let i = 0; i < 40 && !loadFired; i++) await sleep(250);
     await sleep(1500);
     const ready = await send('Runtime.evaluate', { expression: 'window.__ready === true', returnByValue: true }, sessionId);
