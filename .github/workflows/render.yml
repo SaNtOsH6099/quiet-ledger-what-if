@@ -1,0 +1,55 @@
+name: render-item
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Job id, e.g. 16-01. The job's cfg must already be pushed to jobs/<job>/cfg.txt and its still to jobs/<job>/still.png (the cfg bg path must be /jobs/<job>/still.png)."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install three.js
+        run: npm install --no-audit --no-fund
+
+      - name: Start static file server
+        run: |
+          nohup python3 -m http.server 8123 --directory "$GITHUB_WORKSPACE" > /tmp/httpd.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://127.0.0.1:8123/render/scene.html; then echo "server up"; exit 0; fi
+            sleep 1
+          done
+          echo "server never came up"; cat /tmp/httpd.log; exit 1
+
+      - name: Render frames
+        env:
+          CFG_FILE: jobs/${{ inputs.job }}/cfg.txt
+          SCENE_URL: http://127.0.0.1:8123/render/scene.html
+          OUT_DIR: frames-${{ inputs.job }}
+          CHROME_BIN: /usr/bin/google-chrome
+        run: node render/capture.js
+
+      - name: Verify frame count
+        run: |
+          expected=$(python3 -c "import base64,json;print(json.loads(base64.b64decode(open('jobs/${{ inputs.job }}/cfg.txt').read().strip()))['frames'])")
+          got=$(ls frames-${{ inputs.job }}/p_*.png | wc -l)
+          echo "expected=$expected got=$got"
+          test "$got" -eq "$expected"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frames-${{ inputs.job }}
+          path: frames-${{ inputs.job }}/
+          retention-days: 30
