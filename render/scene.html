@@ -1,0 +1,1020 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>short 16 — Ice particle + sync layer</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+  #bg { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; transform-origin: 50% 50%; will-change: transform; }
+  canvas { position: absolute; left: 0; top: 0; display: block; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "/node_modules/three/build/three.module.js" } }
+</script>
+</head>
+<body>
+<img id="bg">
+<script type="module">
+import * as THREE from 'three';
+
+// ---------- config: ?cfg=<base64 JSON> ----------
+// {
+//   bg: "/short-13-volcanoes/14-01a-d3.png", frames: 97,
+//   zoom: 0.015, zoomCentre: {x,y}|null,   // zoom target (default frame centre)
+//   figure: {x0,y0,x1,y1,fade:25}|null,
+//   fg: {url:"/short-13-volcanoes/fg-14-01a.png", drift:14, dir:1|-1}|null,
+//   particles: [ {kind:'motes'|'embers'|'beam'|'breath'|'rise'|'fall'|'drift'|'fountains',
+//                  count, color, size:[a,b], alpha:[a,b],
+//                  origin:{x,y}|null, beam:{x0,y0,x1,y1,spread}|null,
+//                  zone:{x0,y0,x1,y1}|null, origins:[{x,y,ignite}|...]|null,
+//                  vy:[a,b]|null, vx:[a,b]|null, flicker:bool,
+//                  dir:{x,y}|null, speed:[a,b], life:[a,b],
+//                  births:[t,...]|null, maxR:n|undefined,
+//                  renderOrder:0.5|3, noFig:bool,
+//                  speedKeys:[[t,m],...], alphaKeys:[[t,m],...]} ],
+//   overlays: [ {color:'#000000', keys:[[t,alpha],...], topfade:bool} ],
+//   glow: {x,y,size,color,keys:[[t,alpha],...]},
+//   glows: [ {x,y,size,color,keys:[[t,alpha],...]} ],
+//   rects: [ {x0,y0,x1,y1,color,keys:[[t,alpha],...]} ],
+//   sag: {x0,y0,x1,y1, maxShift:6, keys:[[t,frac],...]}|null,
+//   wipes: [ ... ], auroras: [ ... ], ice: {...}   // (13 kinds, unused in 14)
+// }
+// All key times are LOCAL seconds (clip time, 0 = item start).
+// renderOrder: far systems 0.5 (behind the FG plane at 2), near systems 3.
+// noFig: true = the system does NOT fade at the figure rect (02b face, 03c beam).
+const CFG = JSON.parse(atob(new URLSearchParams(location.search).get('cfg') || 'e30='));
+document.getElementById('bg').src = CFG.bg;
+
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rand = mulberry32(1337);
+
+const W = 1080, H = 1920;
+const FRAMES = CFG.frames || 90, FPS = 30;
+const ZOOM_END = (CFG.zoom === undefined) ? 0.015 : CFG.zoom;
+const CENTER = { x: W / 2, y: H / 2 };
+// Zoom target: the bg img's CSS transform-origin is set to ZC so the zoom
+// magnifies toward the beat's focus (crater, tongue, column, sun). Particle
+// and glow positions track the same centre (ZC + (pos - ZC) * z).
+const ZC = CFG.zoomCentre || CENTER;
+
+// ---------- keyframe helpers ----------
+// value(t): piecewise-linear with smootherstep easing between keys.
+function keyVal(keys, t) {
+  if (!keys || !keys.length) return 0;
+  if (t <= keys[0][0]) return keys[0][1];
+  for (let i = 0; i < keys.length - 1; i++) {
+    const [t0, v0] = keys[i], [t1, v1] = keys[i + 1];
+    if (t <= t1) {
+      const u = (t - t0) / (t1 - t0);
+      const e = u * u * (3 - 2 * u);
+      return v0 + (v1 - v0) * e;
+    }
+  }
+  return keys[keys.length - 1][1];
+}
+// speedIntegral(t) = ∫0^t m(u) du, m piecewise-linear through speed keys.
+function makeSpeedIntegral(keys) {
+  const ks = (keys && keys.length) ? keys : [[0, 1]];
+  const cum = [0];
+  for (let i = 0; i < ks.length - 1; i++) {
+    const [t0, m0] = ks[i], [t1, m1] = ks[i + 1];
+    cum.push(cum[i] + 0.5 * (m0 + m1) * (t1 - t0));
+  }
+  return function (t) {
+    if (t <= ks[0][0]) return ks[0][1] * t;
+    for (let i = 0; i < ks.length - 1; i++) {
+      const [t0, m0] = ks[i], [t1, m1] = ks[i + 1];
+      if (t <= t1) {
+        const d = t - t0, span = t1 - t0;
+        return cum[i] + m0 * d + 0.5 * (m1 - m0) * d * d / span;
+      }
+    }
+    const [tl, ml] = ks[ks.length - 1];
+    return cum[cum.length - 1] + ml * (t - tl);
+  };
+}
+
+function zoomAt(n) {
+  if (n < 12) return 1;   // 0.4s static hold after each crossfade
+  const u = (n - 12) / (FRAMES - 13);
+  return 1 + ZOOM_END * (u * u * (3 - 2 * u));
+}
+
+// ---------- renderer ----------
+const bgImg = document.getElementById('bg');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, premultipliedAlpha: true });
+renderer.setSize(W, H);
+renderer.setClearColor(0x000000, 0);
+renderer.setPixelRatio(1);
+document.body.appendChild(renderer.domElement);
+const camera = new THREE.OrthographicCamera(0, W, 0, H, -1, 1);
+camera.position.z = 1;
+const scene = new THREE.Scene();
+
+function straightMaterial(map, opacity = 1) {
+  const mat = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, opacity, side: THREE.DoubleSide });
+  mat.blending = THREE.CustomBlending;
+  mat.blendSrc = THREE.OneFactor; mat.blendDst = THREE.ZeroFactor;
+  mat.blendSrcAlpha = THREE.OneFactor; mat.blendDstAlpha = THREE.ZeroFactor;
+  return mat;
+}
+function normalMaterial(map, opacity = 1) {
+  return new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, opacity, side: THREE.DoubleSide });
+}
+
+function additiveMaterial(map, opacity = 1) {
+  // ADDITIVE glow: result = src.rgb*src.a + dst. A gold glow over a bright
+  // pool/ember must brighten it; NormalBlending darkened it (flow critic:
+  // still pool 197.5 -> 179 at glow 0.35 -> 161 at 0.9 — inverted).
+  const mat = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, opacity, side: THREE.DoubleSide });
+  mat.blending = THREE.CustomBlending;
+  mat.blendSrc = THREE.SrcAlphaFactor; mat.blendDst = THREE.OneFactor;
+  mat.blendSrcAlpha = THREE.OneFactor; mat.blendDstAlpha = THREE.OneFactor;  // v2.1: was SrcAlpha — squared the alpha (a*a) and neutered the glow
+  return mat;
+}
+function makeSprite() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0.0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.2, 'rgba(255,255,255,0.9)');
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.45)');
+  grad.addColorStop(1.0, 'rgba(255,255,255,0)');
+  g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+const spriteTex = makeSprite();
+
+function pointsMaterial(colorHex) {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uMap: { value: spriteTex }, uColor: { value: new THREE.Color(colorHex) } },
+    vertexShader: `
+      attribute float aSize; attribute float aAlpha; varying float vA;
+      void main() { vA = aAlpha; vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = aSize; gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `
+      uniform sampler2D uMap; uniform vec3 uColor; varying float vA;
+      void main() { vec4 tex = texture2D(uMap, gl_PointCoord);
+        float a = tex.a * vA; gl_FragColor = vec4(uColor * a, a); }`,
+    transparent: true, depthWrite: false, blending: THREE.CustomBlending
+  });
+  mat.blendSrc = THREE.OneFactor; mat.blendDst = THREE.OneFactor;
+  mat.blendSrcAlpha = THREE.OneFactor; mat.blendDstAlpha = THREE.OneFactor;
+  return mat;
+}
+
+function makeSystem(count, colorHex) {
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
+  const size = new Float32Array(count);
+  const alpha = new Float32Array(count);
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+  geo.setAttribute('aAlpha', new THREE.BufferAttribute(alpha, 1));
+  const mat = pointsMaterial(colorHex);
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  return { pts, pos, size, alpha };
+}
+
+// ---------- particle systems ----------
+// Figure exclusion rect (measured from the still — see PARTICLE-MAP.md):
+// particles fade before the silhouette, as if passing behind it.
+const FIG = CFG.figure || null;
+function figFade(x, y) {
+  if (!FIG) return 1;
+  const dx = Math.max(FIG.x0 - x, 0, x - FIG.x1);
+  const dy = Math.max(FIG.y0 - y, 0, y - FIG.y1);
+  const d = Math.sqrt(dx * dx + dy * dy);
+  const u = Math.min(1, Math.max(0, d / (FIG.fade || 25)));
+  return u * u * (3 - 2 * u);
+}
+function iceFrontY(t) {
+  if (!CFG.ice) return H;
+  return keyVal(CFG.ice.keys, t) * H;
+}
+const systems = [];
+for (const pc of (CFG.particles || [])) {
+  const sys = makeSystem(pc.count, pc.color);
+  sys.cfg = pc;
+  sys.speedInt = makeSpeedIntegral(pc.speedKeys);
+  sys.parts = [];
+  for (let i = 0; i < pc.count; i++) {
+    const p = {};
+    if (pc.kind === 'motes') {
+      // radial from a point origin
+      p.ox = pc.origin.x; p.oy = pc.origin.y;
+      let ang;
+      if (rand() < 0.65) ang = (20 + rand() * 140) * Math.PI / 180;
+      else ang = rand() * Math.PI * 2;
+      p.ang = ang;
+      p.speed = pc.speed[0] + rand() * (pc.speed[1] - pc.speed[0]);
+      p.life = pc.life[0] + rand() * (pc.life[1] - pc.life[0]);
+      p.age0 = rand() * p.life;
+      p.size0 = pc.size[0] + rand() * (pc.size[1] - pc.size[0]);
+      // maxR: radial spread. 14 sets it per system (face motes 40, bowl 220,
+      // shoot 160); default 140-460 (13 behaviour).
+      p.maxR = pc.maxR ? pc.maxR[0] + rand() * (pc.maxR[1] - pc.maxR[0]) : 140 + rand() * 320;
+      p.aMax = pc.alpha[0] + rand() * (pc.alpha[1] - pc.alpha[0]);
+      p.phase = rand() * Math.PI * 2;
+      p.wob = 0.06 + rand() * 0.10; p.wobF = 0.3 + rand() * 0.4;
+    } else if (pc.kind === 'embers') {
+      // embers rise from a point origin, flickering, slight upward bias
+      p.ox = pc.origin.x; p.oy = pc.origin.y;
+      let ang;
+      if (rand() < 0.75) ang = (215 + rand() * 110) * Math.PI / 180;  // upward cone
+      else ang = rand() * Math.PI * 2;
+      p.ang = ang;
+      p.speed = pc.speed[0] + rand() * (pc.speed[1] - pc.speed[0]);
+      p.life = pc.life[0] + rand() * (pc.life[1] - pc.life[0]);
+      p.age0 = rand() * p.life;
+      p.size0 = pc.size[0] + rand() * (pc.size[1] - pc.size[0]);
+      p.maxR = 30 + rand() * 120;
+      p.aMax = pc.alpha[0] + rand() * (pc.alpha[1] - pc.alpha[0]);
+      p.phase = rand() * Math.PI * 2;
+      p.wob = 0.04 + rand() * 0.08; p.wobF = 0.5 + rand() * 0.6;
+      p.rise = 18 + rand() * 26;
+    } else if (pc.kind === 'beam') {
+      // streak travelling along a beam segment, looping
+      const b = pc.beam;
+      p.u0 = rand();                       // position along the beam
+      p.off = (rand() - 0.5) * 2 * b.spread;  // perpendicular offset
+      p.speed = pc.speed[0] + rand() * (pc.speed[1] - pc.speed[0]);
+      p.life = pc.life[0] + rand() * (pc.life[1] - pc.life[0]);
+      p.age0 = rand() * p.life;
+      p.size0 = pc.size[0] + rand() * (pc.size[1] - pc.size[0]);
+      p.aMax = pc.alpha[0] + rand() * (pc.alpha[1] - pc.alpha[0]);
+      p.phase = rand() * Math.PI * 2;
+    } else if (pc.kind === 'snowFar' || pc.kind === 'snowNear') {
+      // falling snow, deterministic: y wraps inside its zone, x drifts with wind + sway
+      const z = pc.zone;
+      p.x0 = z.x0 + rand() * (z.x1 - z.x0);
+      p.y0 = z.y0 + rand() * (z.y1 - z.y0);
+      p.vy = pc.vy[0] + rand() * (pc.vy[1] - pc.vy[0]);
+      p.vx = pc.vx + (rand() - 0.5) * 4;
+      p.size0 = pc.size[0] + rand() * (pc.size[1] - pc.size[0]);
+      p.aMax = pc.alpha[0] + rand() * (pc.alpha[1] - pc.alpha[0]);
+      p.phase = rand() * Math.PI * 2;
+      p.sway = 4 + rand() * 8; p.swayF = 0.3 + rand() * 0.4;
+    } else if (pc.kind === 'frost') {
+      // crystals ride the advancing ice front: x fixed, y = frontY + offset
+      const z = pc.zone || { x0: 79, x1: 1006 };
+      p.x = z.x0 + rand() * (z.x1 - z.x0);
+      p.off = rand() * 16;
+      p.size0 = pc.size[0] + rand() * (pc.size[1] - pc.size[0]);
+      p.aMax = pc.alpha[0] + rand() * (pc.alpha[1] - pc.alpha[0]);
+      p.phase = rand() * Math.PI * 2;
+    } else if (pc.kind === 'mist') {
+      // puffs rise from open water; each has a fixed source y0 and a cycle
+      const z = pc.zone;
+      p.x0 = z.x0 + rand() * (z.x1 - z.x0);
+      p.y0 = z.y0 + rand() * (z.y1 - z.y0);
+      p.rise = pc.rise[0] + rand() * (pc.rise[1] - pc.rise[0]);
+      p.life = pc.life;
+      p.period = pc.period;
+      p.phase = rand() * pc.period;
+      p.size0 = pc.size[0] + rand() * (pc.size[1] - pc.size[0]);
+      p.aMax = pc.alpha[0] + rand() * (pc.alpha[1] - pc.alpha[0]);
+      p.drift = (rand() - 0.5) * 6;
+    } else if (pc.kind === 'breath') {
+      // one puff per birth time, from the figure's head
+      p.tb = pc.births[i] || 0;
+      p.size0 = pc.size[0] + rand() * (pc.size[1] - pc.size[0]);
+      p.aMax = pc.alpha[0] + rand() * (pc.alpha[1] - pc.alpha[0]);
+    } else if (pc.kind === 'rise' || pc.kind === 'fall') {
+      // zone-bound vertical: rise = upward (smoke, columns, steam, embers),
+      // fall = downward (ash, flecks, drips, frost). Wrap inside the zone.
+      const z = pc.zone;
+      p.x0 = z.x0 + rand() * (z.x1 - z.x0);
+      p.y0 = z.y0 + rand() * (z.y1 - z.y0);
+      p.vy = pc.vy[0] + rand() * (pc.vy[1] - pc.vy[0]);
+      p.vx = pc.vx ? pc.vx[0] + rand() * (pc.vx[1] - pc.vx[0]) : (rand() - 0.5) * 4;
+      p.size0 = pc.size[0] + rand() * (pc.size[1] - pc.size[0]);
+      p.aMax = pc.alpha[0] + rand() * (pc.alpha[1] - pc.alpha[0]);
+      p.phase = rand() * Math.PI * 2;
+      p.sway = 3 + rand() * 6; p.swayF = 0.3 + rand() * 0.4;
+    } else if (pc.kind === 'drift') {
+      // zone-bound horizontal: x wraps in the zone, y fixed with sway
+      // (mist, haze, smoke drift, dust, chaff, frost motes, veil wisps).
+      const z = pc.zone;
+      p.x0 = z.x0 + rand() * (z.x1 - z.x0);
+      p.y0 = z.y0 + rand() * (z.y1 - z.y0);
+      p.vx = pc.vx[0] + rand() * (pc.vx[1] - pc.vx[0]);
+      p.size0 = pc.size[0] + rand() * (pc.size[1] - pc.size[0]);
+      p.aMax = pc.alpha[0] + rand() * (pc.alpha[1] - pc.alpha[0]);
+      p.phase = rand() * Math.PI * 2;
+      p.sway = 3 + rand() * 6; p.swayF = 0.3 + rand() * 0.4;
+    } else if (pc.kind === 'fountains') {
+      // origins array + per-origin ignition times. Each particle belongs to
+      // one origin; it emits nothing before that origin ignites, then loops
+      // like an ember (rising, flickering). count = origins.length * perOrigin.
+      const o = pc.origins[i % pc.origins.length];
+      p.ox = o.x; p.oy = o.y; p.ignite = o.ignite;
+      let ang;
+      if (rand() < 0.75) ang = (215 + rand() * 110) * Math.PI / 180;  // upward cone
+      else ang = rand() * Math.PI * 2;
+      p.ang = ang;
+      p.speed = pc.speed[0] + rand() * (pc.speed[1] - pc.speed[0]);
+      p.life = pc.life[0] + rand() * (pc.life[1] - pc.life[0]);
+      p.age0 = rand() * p.life;
+      p.size0 = pc.size[0] + rand() * (pc.size[1] - pc.size[0]);
+      p.maxR = 30 + rand() * 120;
+      p.aMax = pc.alpha[0] + rand() * (pc.alpha[1] - pc.alpha[0]);
+      p.phase = rand() * Math.PI * 2;
+      p.wob = 0.04 + rand() * 0.08; p.wobF = 0.5 + rand() * 0.6;
+      p.rise = 18 + rand() * 26;
+    } else {  // dust: full-frame drift, toroidal wrap
+      let x, y;
+      do { x = rand() * W; y = rand() * H; }
+      while (y > H * 0.40 && y < H * 0.60 && rand() > 0.30);
+      p.x = x; p.y = y;
+      p.vx = pc.dir ? pc.dir.x * (pc.speed[0] + rand() * (pc.speed[1] - pc.speed[0])) : (-6 + rand() * 8);
+      p.vy = pc.dir ? pc.dir.y * (pc.speed[0] + rand() * (pc.speed[1] - pc.speed[0])) : (4 + rand() * 8);
+      p.size0 = pc.size[0] + rand() * (pc.size[1] - pc.size[0]);
+      p.aBase = pc.alpha[0] + rand() * (pc.alpha[1] - pc.alpha[0]);
+      p.phase = rand() * Math.PI * 2;
+      p.breatheF = 0.3 + rand() * 0.5;
+    }
+    sys.parts.push(p);
+  }
+  // per-system depth: far 0.5 (behind the FG plane at 2), near 3 (in front).
+  // Default 3 (13 behaviour) when renderOrder is not given.
+  sys.pts.renderOrder = (pc.renderOrder !== undefined) ? pc.renderOrder : 3;
+  scene.add(sys.pts);
+  systems.push(sys);
+}
+
+// ---------- overlays (full-frame colour planes, alpha keyframes) ----------
+const overlayPlanes = [];
+function makeGlowTexture(hex) {
+  const S = 512, c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  const col = new THREE.Color(hex);
+  const r = Math.round(col.r * 255), gg = Math.round(col.g * 255), b = Math.round(col.b * 255);
+  const grad = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+  grad.addColorStop(0.0, `rgba(${r},${gg},${b},0.95)`);
+  grad.addColorStop(0.25, `rgba(${r},${gg},${b},0.55)`);
+  grad.addColorStop(0.5, `rgba(${r},${gg},${b},0.20)`);
+  grad.addColorStop(1.0, `rgba(${r},${gg},${b},0)`);
+  g.fillStyle = grad; g.fillRect(0, 0, S, S);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+function makeTopfadeTexture(hex) {
+  // black (or colour) at top fading to transparent at ~55% height
+  const c = document.createElement('canvas');
+  c.width = 4; c.height = 512;
+  const g = c.getContext('2d');
+  const col = new THREE.Color(hex);
+  const r = Math.round(col.r * 255), gg = Math.round(col.g * 255), b = Math.round(col.b * 255);
+  // v2.1: REVERSED — canvas-top renders at screen-BOTTOM (same flip as drawIce),
+  // so the old stops put the black at the bottom. Now black is at the SCREEN top.
+  const grad = g.createLinearGradient(0, 0, 0, 512);
+  grad.addColorStop(0.0, `rgba(${r},${gg},${b},0)`);
+  grad.addColorStop(0.1, `rgba(${r},${gg},${b},0)`);
+  grad.addColorStop(0.45, `rgba(${r},${gg},${b},0.55)`);
+  grad.addColorStop(1.0, `rgba(${r},${gg},${b},1)`);
+  g.fillStyle = grad; g.fillRect(0, 0, 4, 512);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+function makeBandTexture(hex) {
+  // soft-edged horizontal band: full colour in the middle 25-75%, feathered
+  // to transparent at both edges — reads as haze, not a slab. (2026-11-19,
+  // Stage 8 v1 FAIL: the flat 04b rect read as a hard-edged pale rectangle
+  // slicing the sun disc.) The gradient is symmetric top<->bottom, so the
+  // pipeline's canvas flip is irrelevant here.
+  const c = document.createElement('canvas');
+  c.width = 4; c.height = 256;
+  const g = c.getContext('2d');
+  const col = new THREE.Color(hex);
+  const r = Math.round(col.r * 255), gg = Math.round(col.g * 255), b = Math.round(col.b * 255);
+  const grad = g.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0.0, `rgba(${r},${gg},${b},0)`);
+  grad.addColorStop(0.25, `rgba(${r},${gg},${b},1)`);
+  grad.addColorStop(0.75, `rgba(${r},${gg},${b},1)`);
+  grad.addColorStop(1.0, `rgba(${r},${gg},${b},0)`);
+  g.fillStyle = grad; g.fillRect(0, 0, 4, 256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+for (const oc of (CFG.overlays || [])) {
+  const tex = oc.topfade ? makeTopfadeTexture(oc.color) : null;
+  const mat = tex ? normalMaterial(tex, 0) : straightMaterial(null, 0);
+  if (!tex) mat.color = new THREE.Color(oc.color);
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat);
+  plane.position.set(CENTER.x, CENTER.y, 0);  // was -0.3: outside camera far plane (near -1, far 1, cam z=1 -> visible z in [0,2]); overlays were culled
+  plane.renderOrder = 1;
+  scene.add(plane);
+  overlayPlanes.push({ mat, keys: oc.keys });
+}
+
+// ---------- glow plane (pool brighten / ember flicker) ----------
+let glowPlane = null, glowMat = null;
+if (CFG.glow) {
+  glowMat = additiveMaterial(makeGlowTexture(CFG.glow.color), 0);  // ADDITIVE (was normal — inverted the pool/ember)
+  glowPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), glowMat);
+  glowPlane.scale.set(CFG.glow.size, CFG.glow.size, 1);
+  glowPlane.position.set(CFG.glow.x, CFG.glow.y, 0);
+  glowPlane.renderOrder = 2;
+  scene.add(glowPlane);
+}
+
+// ---------- ice wipe (canvas texture, jagged edge, edgeY keyframes) ----------
+let icePlane = null, iceMat = null, iceCanvas = null, iceCtx = null, iceTex = null, lastIceY = -1;
+if (CFG.ice) {
+  iceCanvas = document.createElement('canvas');
+  iceCanvas.width = 540; iceCanvas.height = 960;
+  iceCtx = iceCanvas.getContext('2d');
+  iceTex = new THREE.CanvasTexture(iceCanvas);
+  iceTex.colorSpace = THREE.SRGBColorSpace;
+  iceMat = normalMaterial(iceTex, CFG.ice.opacity || 0.92);
+  icePlane = new THREE.Mesh(new THREE.PlaneGeometry(W, H), iceMat);
+  icePlane.position.set(CENTER.x, CENTER.y, 0);
+  icePlane.renderOrder = 0;
+  scene.add(icePlane);
+}
+const HORIZON01 = (CFG.ice && CFG.ice.horizon !== undefined) ? CFG.ice.horizon : 0.436;
+function drawIce(edgeY01) {
+  // NATURAL TEST: ice grows TOP-DOWN from the horizon (screen), not bottom-up.
+  // Canvas<->screen flip (y-down ortho): canvas y_c maps to screen
+  // y_s = (960 - y_c) * 2. So the ice region on screen [horizon, edge]
+  // is canvas y in [(1-edgeY01)*960, (1-HORIZON01)*960]; the jagged
+  // advancing front is the canvas-TOP side of the fill.
+  if (Math.abs(edgeY01 - lastIceY) < 0.002) return;
+  lastIceY = edgeY01;
+  const g = iceCtx, cw = 540, ch = 960;
+  g.clearRect(0, 0, cw, ch);
+  const horizonC = (1 - HORIZON01) * ch;
+  const edgeTopC = (1 - edgeY01) * ch;
+  if (edgeTopC >= horizonC - 1) { iceTex.needsUpdate = true; return; }
+  const r2 = mulberry32(99);
+  g.fillStyle = CFG.ice.color || '#d8eaf5';
+  g.beginPath();
+  g.moveTo(0, horizonC); g.lineTo(cw, horizonC);
+  const steps = 80;
+  for (let i = steps; i >= 0; i--) {  // x cw->0: closing edge is vertical at x=0 (0->steps made a diagonal close = bowtie)
+    const x = (i / steps) * cw;
+    const y = edgeTopC + (r2() - 0.5) * 10 + Math.sin(i * 1.7) * 4;
+    g.lineTo(x, y);
+  }
+  g.closePath(); g.fill();
+  // stippled crystals just inside the ice, near the advancing front
+  for (let i = 0; i < 260; i++) {
+    const x = r2() * cw;
+    const y = edgeTopC + r2() * 45;
+    if (y > horizonC) continue;
+    g.fillStyle = `rgba(255,255,255,${0.25 + r2() * 0.5})`;
+    g.beginPath(); g.arc(x, y, 0.8 + r2() * 2.2, 0, Math.PI * 2); g.fill();
+  }
+  // a few deeper-blue speckles for texture in the ice body
+  for (let i = 0; i < 120; i++) {
+    const x = r2() * cw;
+    const y = edgeTopC + r2() * (horizonC - edgeTopC);
+    g.fillStyle = `rgba(120,160,200,${0.15 + r2() * 0.3})`;
+    g.beginPath(); g.arc(x, y, 0.6 + r2() * 1.6, 0, Math.PI * 2); g.fill();
+  }
+  iceTex.needsUpdate = true;
+}
+
+
+// ---------- wipe planes (darkness waves) ----------
+// Canvas y_c maps to screen y_s = rectY0 + (1 - y_c/256) * rectH (canvas top
+// renders at the screen BOTTOM of the rect — same flip as drawIce).
+const wipePlanes = [];
+for (const wc of (CFG.wipes || [])) {
+  const cw = 256, ch = 256;
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const ctx = cv.getContext('2d');
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = normalMaterial(tex, wc.opacity !== undefined ? wc.opacity : 0.95);
+  const w = wc.x1 - wc.x0, h = wc.y1 - wc.y0;
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  plane.position.set((wc.x0 + wc.x1) / 2, (wc.y0 + wc.y1) / 2, 0);
+  plane.renderOrder = 0;
+  scene.add(plane);
+  const jr = mulberry32(wc.seed || 77);
+  const jit = [];
+  for (let i = 0; i < 33; i++) jit.push((jr() - 0.5) * 0.16);
+  wipePlanes.push({ cv, ctx, tex, keys: wc.keys, mode: wc.mode, dir: wc.dir || 1, jit, lastF: -1,
+                    rect: { x0: wc.x0, y0: wc.y0, x1: wc.x1, y1: wc.y1, w, h }, dots: wc.dots || null });
+}
+function drawWipe(wp, frac) {
+  if (Math.abs(frac - wp.lastF) < 0.002) return;
+  wp.lastF = frac;
+  const g = wp.ctx, cw = 256, ch = 256;
+  g.clearRect(0, 0, cw, ch);
+  if (frac <= 0.001) { wp.tex.needsUpdate = true; return; }
+  g.fillStyle = '#000000';
+  if (wp.dots) {
+    // DOTS wipe: black out individual lights as the wave passes them — the
+    // buildings stay visible. Edge position in screen px, per-dot jitter.
+    const w = wp.rect.w, h = wp.rect.h;
+    const edge = wp.dir === 1 ? wp.rect.x0 + frac * w : wp.rect.x1 - frac * w;
+    for (const d of wp.dots) {
+      const ex = wp.dir === 1 ? edge + (d.j || 0) : edge - (d.j || 0);
+      if ((wp.dir === 1 && d.x > ex) || (wp.dir === -1 && d.x < ex)) continue;
+      const cx = ((d.x - wp.rect.x0) / w) * cw;
+      const cy = (1 - (d.y - wp.rect.y0) / h) * ch;
+      const r = Math.max(1.5, (d.r / w) * cw);
+      g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+    }
+    wp.tex.needsUpdate = true;
+    return;
+  }
+  g.beginPath();
+  if (wp.mode === 'h') {
+    // covered: screen x in [x0, x0+frac*W] (dir 1) or [x1-frac*W, x1] (dir -1).
+    // Canvas x is NOT flipped: canvas left = screen left.
+    const edge = wp.dir === 1 ? frac * cw : (1 - frac) * cw;
+    g.moveTo(wp.dir === 1 ? 0 : cw, 0);
+    g.lineTo(wp.dir === 1 ? 0 : cw, ch);
+    for (let i = 32; i >= 0; i--) {
+      const y = (i / 32) * ch;
+      const ex = edge + wp.jit[i] * cw;
+      g.lineTo(ex, y);
+    }
+  } else {
+    // covered: screen y in [y0, y0+frac*H] (dir 1). Canvas bottom = screen top,
+    // so the covered region is canvas y in [(1-frac)*ch, ch].
+    const edge = (1 - frac) * ch;
+    g.moveTo(0, ch); g.lineTo(cw, ch);
+    for (let i = 32; i >= 0; i--) {
+      const x = (i / 32) * cw;
+      const ey = edge + wp.jit[i] * ch;
+      g.lineTo(x, ey);
+    }
+  }
+  g.closePath(); g.fill();
+  wp.tex.needsUpdate = true;
+}
+
+// ---------- rect overlays (flat colour rects: flicker / darkening) ----------
+const rectPlanes = [];
+for (const rc of (CFG.rects || [])) {
+  // soft: a feathered band texture instead of a flat slab (04b haze band —
+  // the flat rect read as a hard-edged pale rectangle slicing the sun disc).
+  const mat = rc.soft ? normalMaterial(makeBandTexture(rc.color), 0)
+                      : straightMaterial(null, 0);
+  if (!rc.soft) mat.color = new THREE.Color(rc.color);
+  const w = rc.x1 - rc.x0, h = rc.y1 - rc.y0;
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  plane.position.set((rc.x0 + rc.x1) / 2, (rc.y0 + rc.y1) / 2, 0);
+  plane.renderOrder = 1;
+  scene.add(plane);
+  rectPlanes.push({ mat, plane, keys: rc.keys, cx: (rc.x0 + rc.x1) / 2, cy: (rc.y0 + rc.y1) / 2 });
+}
+
+// ---------- glow array (13: multiple glows) ----------
+const glowPlanes = [];
+for (const gc of (CFG.glows || [])) {
+  const gm = additiveMaterial(makeGlowTexture(gc.color), 0);
+  const gp = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), gm);
+  gp.scale.set(gc.size, gc.size, 1);
+  gp.position.set(gc.x, gc.y, 0);
+  gp.renderOrder = 2;
+  scene.add(gp);
+  glowPlanes.push({ mat: gm, plane: gp, cfg: gc });
+}
+
+// ---------- FG parallax plane (14: masked bottom-strip cutout) ----------
+// One masked bottom-strip cutout per KEEP scene, feathered top edge, lateral
+// drift ~14px over the shot after the 0.4s hold, tracking the zoom (scale = z,
+// position = centre + drift). renderOrder 2: far particles (0.5) sit behind
+// it, near particles (3) in front of it. The figure column is excluded from
+// the cutout (alpha <= 5, verified) so the child never drifts.
+let fgPlane = null, fgMat = null, fgImg = null;
+if (CFG.fg) {
+  fgImg = new Image();
+  fgImg.src = CFG.fg.url;
+  const fgTex = new THREE.Texture(fgImg);
+  // flipY = false — THE fix (2026-11-19, Stage 8 v1 FAIL): PlaneGeometry +
+  // this Y-down ortho camera (top=0, bottom=1920) renders textures
+  // vertically flipped — the plane's local +Y (uv v=1) maps to the screen
+  // BOTTOM, so with the default flipY=true the PNG's bottom strip (the
+  // foreground cutout) rendered upside-down at the TOP of the frame in all
+  // six parallax scenes. The canvas textures compensate in their draw code
+  // (topfade/ice/wipes/aurora); the sag plane did not and was dropped for
+  // the same flip. The FG PNG is loaded directly, so flipY must be false:
+  // v=0 (image top) then maps to the plane's local -Y = screen top.
+  fgTex.flipY = false;
+  fgTex.colorSpace = THREE.SRGBColorSpace;
+  fgMat = normalMaterial(fgTex, 1);
+  fgPlane = new THREE.Mesh(new THREE.PlaneGeometry(W, H), fgMat);
+  fgPlane.position.set(CENTER.x, CENTER.y, 0);
+  fgPlane.renderOrder = 2;
+  scene.add(fgPlane);
+  fgImg.decode().then(() => {
+    fgTex.needsUpdate = true;
+    window.__fgReady = true;
+  }).catch(() => { window.__fgReady = true; });
+}
+
+// ---------- sag plane (14: 03b ash pile sags on "crush") ----------
+// x-tapered canvas shift: shift(y) = maxShift * frac * sin(pi*(y-y0)/(y1-y0)).
+// 0 at the rect's top and bottom edges (no seam), max at the centre. The
+// texture is the still's pile region, redrawn in horizontal strips each
+// shifted by its own amount. Verification gate: render one frame at full
+// sag and view it; drop it if seamy.
+let sagPlane = null, sagMat = null, sagCanvas = null, sagCtx = null, sagTex = null, lastSagF = -1;
+if (CFG.sag) {
+  const sc = CFG.sag;
+  const sw = Math.round(sc.x1 - sc.x0), sh = Math.round(sc.y1 - sc.y0);
+  sagCanvas = document.createElement('canvas');
+  sagCanvas.width = sw; sagCanvas.height = sh;
+  sagCtx = sagCanvas.getContext('2d');
+  sagTex = new THREE.CanvasTexture(sagCanvas);
+  sagTex.colorSpace = THREE.SRGBColorSpace;
+  sagMat = normalMaterial(sagTex, 1);
+  sagPlane = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), sagMat);
+  sagPlane.position.set((sc.x0 + sc.x1) / 2, (sc.y0 + sc.y1) / 2, 0);
+  sagPlane.renderOrder = 0;
+  scene.add(sagPlane);
+}
+function drawSag(frac) {
+  if (!CFG.sag) return;
+  if (Math.abs(frac - lastSagF) < 0.002) return;
+  lastSagF = frac;
+  const sc = CFG.sag;
+  const sw = sagCanvas.width, sh = sagCanvas.height;
+  const g = sagCtx;
+  g.clearRect(0, 0, sw, sh);
+  // source rect in the still (bgImg is 1152x2048; the frame is 1080x1920,
+  // so still = frame * 1152/1080). Draw the region unshifted when frac = 0.
+  const k = 1152 / 1080;
+  const strips = 46;
+  const stripH = sh / strips;
+  for (let i = 0; i < strips; i++) {
+    const yC = (i + 0.5) / strips;  // centre of the strip, 0..1 down the rect
+    const shift = sc.maxShift * frac * Math.sin(Math.PI * yC);
+    const sy = sc.y0 + i * stripH;  // frame coords -> still coords
+    g.drawImage(bgImg, sc.x0 * k, sy * k, sw * k, stripH * k,
+                0, i * stripH + shift, sw, stripH);
+  }
+  sagTex.needsUpdate = true;
+}
+
+// ---------- aurora planes (vertical ribbon curtains in a zone) ----------
+const auroraPlanes = [];
+for (const ac of (CFG.auroras || [])) {
+  const z = ac.zone;
+  const cw = 270, ch = 480;
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const ctx = cv.getContext('2d');
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = normalMaterial(tex, 1);
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(z.x1 - z.x0, z.y1 - z.y0), mat);
+  plane.position.set((z.x0 + z.x1) / 2, (z.y0 + z.y1) / 2, 0);
+  plane.renderOrder = 1;
+  scene.add(plane);
+  const r2 = mulberry32(ac.seed || 1);
+  const ribbons = [];
+  const n = ac.ribbons || 8;
+  for (let i = 0; i < n; i++) {
+    ribbons.push({
+      x: 0.05 + r2() * 0.9, w: 0.03 + r2() * 0.09,
+      top: r2() * 0.15, len: 0.45 + r2() * 0.5,
+      color: ac.colors[Math.floor(r2() * ac.colors.length)],
+      phase: r2() * Math.PI * 2, swayF: 0.2 + r2() * 0.3,
+    });
+  }
+  auroraPlanes.push({ cv, ctx, tex, zone: z, ribbons, keys: ac.keys, sway: ac.sway || 14, lastA: -1 });
+}
+function drawAurora(ap, t) {
+  // Ribbons are wavy vertical curtains, NOT ellipses: a wavy centreline path
+  // with a 3-pass soft horizontal profile (wide faint + mid + narrow strong)
+  // and a per-ribbon vertical fade (bright at its top, gone at its bottom).
+  // The ellipse version read as pink pills — this is the fix.
+  const a = Math.min(1, Math.max(0, keyVal(ap.keys, t)));
+  ap.lastA = a;
+  const g = ap.ctx, cw = 270, ch = 480;
+  g.clearRect(0, 0, cw, ch);
+  if (a <= 0.001) { ap.tex.needsUpdate = true; return; }
+  const tmp = drawAurora._tmp || (drawAurora._tmp = document.createElement('canvas'));
+  tmp.width = cw; tmp.height = ch;
+  const tg = tmp.getContext('2d');
+  for (const r of ap.ribbons) {
+    // ribbon top/bottom in CANVAS coords: screen top = canvas bottom.
+    const yTopS = r.top * ch, yBotS = Math.min(ch, (r.top + r.len) * ch);
+    const yTopC = ch - yTopS, yBotC = ch - yBotS;  // canvas: top of ribbon is LOWER y
+    const cx0 = r.x * cw;
+    const wpx = r.w * cw;
+    const swayAmp = ap.sway * 0.5;
+    tg.clearRect(0, 0, cw, ch);
+    // 3-pass soft profile: wide faint, mid, narrow strong
+    const passes = [[1.7, 0.16], [1.0, 0.32], [0.5, 0.5]];
+    for (const [wMul, aMul] of passes) {
+      tg.beginPath();
+      const steps = 24;
+      for (let i = 0; i <= steps; i++) {
+        const y = yBotC + (yTopC - yBotC) * (i / steps);  // canvas top->bottom
+        const yy = yTopS + (yBotS - yTopS) * (i / steps); // screen-top measured
+        const cx = cx0 + Math.sin(yy * 0.012 + r.phase) * swayAmp +
+                   Math.sin(t * r.swayF + r.phase) * ap.sway * 0.4;
+        const w = wpx * wMul * (1 - 0.25 * (i / steps));  // taper toward bottom
+        if (i === 0) tg.moveTo(cx - w / 2, y); else tg.lineTo(cx - w / 2, y);
+      }
+      for (let i = steps; i >= 0; i--) {
+        const y = yBotC + (yTopC - yBotC) * (i / steps);
+        const yy = yTopS + (yBotS - yTopS) * (i / steps);
+        const cx = cx0 + Math.sin(yy * 0.012 + r.phase) * swayAmp +
+                   Math.sin(t * r.swayF + r.phase) * ap.sway * 0.4;
+        const w = wpx * wMul * (1 - 0.25 * (i / steps));
+        tg.lineTo(cx + w / 2, y);
+      }
+      tg.closePath();
+      tg.fillStyle = r.color;
+      tg.globalAlpha = aMul;
+      tg.fill();
+    }
+    // per-ribbon vertical fade: bright at its top (canvas bottom), gone at bottom
+    tg.globalCompositeOperation = 'destination-in';
+    const grad = tg.createLinearGradient(0, yBotC, 0, yTopC);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(0.35, 'rgba(0,0,0,0.85)');
+    grad.addColorStop(1, 'rgba(0,0,0,1)');
+    tg.fillStyle = grad;
+    tg.fillRect(0, 0, cw, ch);
+    tg.globalCompositeOperation = 'source-over';
+    tg.globalAlpha = 1;
+    g.globalAlpha = a;
+    g.drawImage(tmp, 0, 0);
+  }
+  g.globalAlpha = 1;
+  ap.tex.needsUpdate = true;
+}
+
+// ---------- deterministic frame render ----------
+window.renderFrame = function (n) {
+  const t = n / FPS;
+  const z = zoomAt(n);
+  const BASE = CFG.baseScale || 1.06;  // crops the generator's deckled cream border so art fills the frame
+  // ZB = the bg's TOTAL scale. The bg img is scaled by BASE*z around ZC, so
+  // every overlay that must stay registered to the art (particles, glows,
+  // FG, sag, rects) tracks ZB, not z. (13 tracked z only — a 6% mis-
+  // registration that its zone-based checks tolerated, but 14's hard-edged
+  // sag plane makes it visible as a seam. Fixed here.)
+  const ZB = BASE * z;
+  bgImg.style.transformOrigin = `${(ZC.x / W * 100).toFixed(2)}% ${(ZC.y / H * 100).toFixed(2)}%`;
+  bgImg.style.transform = `scale(${ZB})`;
+
+  // FG parallax plane: tracks the zoom (scale = ZB around ZC) + lateral drift
+  // ~14px over the shot after the 0.4s hold (n >= 12), direction per scene.
+  if (fgPlane) {
+    const u = (n < 12) ? 0 : (n - 12) / (FRAMES - 13);
+    const e = u * u * (3 - 2 * u);
+    const drift = (CFG.fg.drift || 14) * (CFG.fg.dir || 1) * e;
+    fgPlane.position.set(ZC.x + (CENTER.x - ZC.x) * ZB + drift,
+                         ZC.y + (CENTER.y - ZC.y) * ZB, 0);
+    fgPlane.scale.set(ZB, ZB, 1);
+  }
+  if (sagPlane) {
+    sagPlane.position.set(ZC.x + ((CFG.sag.x0 + CFG.sag.x1) / 2 - ZC.x) * ZB,
+                          ZC.y + ((CFG.sag.y0 + CFG.sag.y1) / 2 - ZC.y) * ZB, 0);
+    sagPlane.scale.set(ZB, ZB, 1);
+    drawSag(keyVal(CFG.sag.keys, t));
+  }
+
+  for (const o of overlayPlanes) {
+    o.mat.opacity = Math.min(1, Math.max(0, keyVal(o.keys, t)));
+  }
+  for (const wp of wipePlanes) {
+    drawWipe(wp, keyVal(wp.keys, t));
+  }
+  for (const rp of rectPlanes) {
+    rp.mat.opacity = Math.min(1, Math.max(0, keyVal(rp.keys, t)));
+    // rects track the zoom (ZB) so they stay registered to the art beneath.
+    if (rp.plane) {
+      rp.plane.position.set(ZC.x + (rp.cx - ZC.x) * ZB, ZC.y + (rp.cy - ZC.y) * ZB, 0);
+      rp.plane.scale.set(ZB, ZB, 1);
+    }
+  }
+  for (const gp of glowPlanes) {
+    gp.plane.position.set(ZC.x + (gp.cfg.x - ZC.x) * ZB,
+                          ZC.y + (gp.cfg.y - ZC.y) * ZB, 0);
+    gp.plane.scale.set(gp.cfg.size * ZB, gp.cfg.size * ZB, 1);
+    gp.mat.opacity = Math.min(1, Math.max(0, keyVal(gp.cfg.keys, t)));
+  }
+  for (const ap of auroraPlanes) {
+    drawAurora(ap, t);
+  }
+  if (glowPlane) {
+    // Fenrir pass: glow tracks the bg zoom (same centre-relative mapping as
+    // the motes + the hook sun) so it stays ON the pool/ember instead of
+    // drifting off as the bg zooms — kills the 02b centre-box dip at its root.
+    glowPlane.position.set(ZC.x + (CFG.glow.x - ZC.x) * ZB,
+                           ZC.y + (CFG.glow.y - ZC.y) * ZB, 0);
+    glowPlane.scale.set(CFG.glow.size * ZB, CFG.glow.size * ZB, 1);
+    glowMat.opacity = Math.min(1, Math.max(0, keyVal(CFG.glow.keys, t)));
+  }
+  if (icePlane) {
+    drawIce(keyVal(CFG.ice.keys, t));
+  }
+
+  for (const sys of systems) {
+    const pc = sys.cfg;
+    const S = sys.speedInt(t);
+    const aMult = keyVal(pc.alphaKeys, t);
+    if (pc.kind === 'motes') {
+      const zc = { x: ZC.x + (pc.origin.x - ZC.x) * ZB, y: ZC.y + (pc.origin.y - ZC.y) * ZB };
+      for (let i = 0; i < sys.parts.length; i++) {
+        const p = sys.parts[i];
+        const age = (p.age0 + S) % p.life;
+        const pr = age / p.life;
+        const ang = p.ang + p.wob * Math.sin(t * p.wobF + p.phase);
+        const r = pr * p.maxR;
+        sys.pos[i * 3] = zc.x + Math.cos(ang) * r;
+        sys.pos[i * 3 + 1] = zc.y + Math.sin(ang) * r + age * 6;
+        sys.pos[i * 3 + 2] = 0;
+        sys.size[i] = p.size0 * (1 + pr * 0.6);
+        sys.alpha[i] = Math.sin(pr * Math.PI) * p.aMax * aMult *
+          (pc.noFig ? 1 : figFade(sys.pos[i * 3], sys.pos[i * 3 + 1]));
+      }
+    } else if (pc.kind === 'embers') {
+      const zc = { x: ZC.x + (pc.origin.x - ZC.x) * ZB, y: ZC.y + (pc.origin.y - ZC.y) * ZB };
+      for (let i = 0; i < sys.parts.length; i++) {
+        const p = sys.parts[i];
+        const age = (p.age0 + S) % p.life;
+        const pr = age / p.life;
+        const ang = p.ang + p.wob * Math.sin(t * p.wobF + p.phase);
+        const r = pr * p.maxR;
+        const x = zc.x + Math.cos(ang) * r;
+        const y = zc.y + Math.sin(ang) * r - p.rise * age;
+        sys.pos[i * 3] = x; sys.pos[i * 3 + 1] = y; sys.pos[i * 3 + 2] = 0;
+        sys.size[i] = p.size0 * (1 + pr * 0.5);
+        const flick = 0.65 + 0.35 * Math.sin(t * 9 + p.phase * 7);
+        sys.alpha[i] = Math.sin(pr * Math.PI) * p.aMax * aMult * flick *
+          (pc.noFig ? 1 : figFade(x, y));
+      }
+    } else if (pc.kind === 'rise' || pc.kind === 'fall') {
+      // zone-bound vertical with wrap. rise: y decreases (upward), wraps to
+      // the zone bottom; fall: y increases (downward), wraps to the zone top.
+      // vy is the per-particle speed (px/s, signed: rise negative, fall
+      // positive); the speed integral S scales it (speedKeys thicken a fall).
+      const z = pc.zone;
+      const zh = z.y1 - z.y0;
+      const zw = z.x1 - z.x0;
+      for (let i = 0; i < sys.parts.length; i++) {
+        const p = sys.parts[i];
+        let y, x;
+        if (pc.kind === 'rise') {
+          y = z.y1 - (((z.y1 - p.y0) + (-p.vy) * S) % zh + zh) % zh;
+        } else {
+          y = z.y0 + (((p.y0 - z.y0) + p.vy * S) % zh + zh) % zh;
+        }
+        x = p.x0 + p.vx * S + Math.sin(t * p.swayF + p.phase) * p.sway;
+        x = z.x0 + (((x - z.x0) % zw) + zw) % zw;
+        const topF = Math.min(1, Math.max(0, (y - z.y0) / 40));
+        const botF = Math.min(1, Math.max(0, (z.y1 - y) / 60));
+        const flick = pc.flicker ? (0.65 + 0.35 * Math.sin(t * 9 + p.phase * 7)) : 1;
+        sys.pos[i * 3] = x; sys.pos[i * 3 + 1] = y; sys.pos[i * 3 + 2] = 0;
+        sys.size[i] = p.size0;
+        sys.alpha[i] = p.aMax * topF * botF * flick * aMult *
+          (pc.noFig ? 1 : figFade(x, y));
+      }
+    } else if (pc.kind === 'drift') {
+      // zone-bound horizontal: x wraps in the zone, y fixed with sway.
+      const z = pc.zone;
+      const zw = z.x1 - z.x0;
+      for (let i = 0; i < sys.parts.length; i++) {
+        const p = sys.parts[i];
+        const x = z.x0 + (((p.x0 - z.x0) + p.vx * S) % zw + zw) % zw;
+        const y = p.y0 + Math.sin(t * p.swayF + p.phase) * p.sway;
+        const leftF = Math.min(1, Math.max(0, (x - z.x0) / 40));
+        const rightF = Math.min(1, Math.max(0, (z.x1 - x) / 40));
+        sys.pos[i * 3] = x; sys.pos[i * 3 + 1] = y; sys.pos[i * 3 + 2] = 0;
+        sys.size[i] = p.size0;
+        sys.alpha[i] = p.aMax * leftF * rightF * aMult *
+          (pc.noFig ? 1 : figFade(x, y));
+      }
+    } else if (pc.kind === 'fountains') {
+      // each origin ignites at its own time, then loops like an ember.
+      for (let i = 0; i < sys.parts.length; i++) {
+        const p = sys.parts[i];
+        const age = t - p.ignite;
+        if (age < 0) {
+          sys.pos[i * 3] = p.ox; sys.pos[i * 3 + 1] = p.oy; sys.pos[i * 3 + 2] = 0;
+          sys.size[i] = p.size0; sys.alpha[i] = 0;
+          continue;
+        }
+        const a2 = (p.age0 + age) % p.life;
+        const pr = a2 / p.life;
+        const ang = p.ang + p.wob * Math.sin(t * p.wobF + p.phase);
+        const r = pr * p.maxR;
+        const zc = { x: ZC.x + (p.ox - ZC.x) * ZB, y: ZC.y + (p.oy - ZC.y) * ZB };
+        const x = zc.x + Math.cos(ang) * r;
+        const y = zc.y + Math.sin(ang) * r - p.rise * a2;
+        sys.pos[i * 3] = x; sys.pos[i * 3 + 1] = y; sys.pos[i * 3 + 2] = 0;
+        sys.size[i] = p.size0 * (1 + pr * 0.5);
+        const flick = 0.65 + 0.35 * Math.sin(t * 9 + p.phase * 7);
+        const igniteF = Math.min(1, Math.max(0, age / 0.3));
+        sys.alpha[i] = Math.sin(pr * Math.PI) * p.aMax * aMult * flick * igniteF *
+          (pc.noFig ? 1 : figFade(x, y));
+      }
+    } else if (pc.kind === 'beam') {
+      const b = pc.beam;
+      const dx = b.x1 - b.x0, dy = b.y1 - b.y0;
+      const len = Math.hypot(dx, dy);
+      const nx = -dy / len, ny = dx / len;  // perpendicular
+      for (let i = 0; i < sys.parts.length; i++) {
+        const p = sys.parts[i];
+        const u = ((p.u0 + S * p.speed / len) % 1 + 1) % 1;
+        const x = b.x0 + dx * u + nx * p.off;
+        const y = b.y0 + dy * u + ny * p.off;
+        sys.pos[i * 3] = x; sys.pos[i * 3 + 1] = y; sys.pos[i * 3 + 2] = 0;
+        sys.size[i] = p.size0;
+        sys.alpha[i] = Math.sin(u * Math.PI) * p.aMax * aMult;
+      }
+    } else if (pc.kind === 'snowFar' || pc.kind === 'snowNear') {
+      const z = pc.zone;
+      const zh = z.y1 - z.y0;
+      for (let i = 0; i < sys.parts.length; i++) {
+        const p = sys.parts[i];
+        let y = z.y0 + (((p.y0 - z.y0) + p.vy * S) % zh + zh) % zh;
+        let x = p.x0 + p.vx * S + Math.sin(t * p.swayF + p.phase) * p.sway;
+        const zw = z.x1 - z.x0;
+        x = z.x0 + (((x - z.x0) % zw) + zw) % zw;
+        // fade in at top, out at the floe, and before the figure silhouette
+        const topF = Math.min(1, Math.max(0, (y - z.y0) / 40));
+        const botF = Math.min(1, Math.max(0, (z.y1 - y) / 60));
+        sys.pos[i * 3] = x; sys.pos[i * 3 + 1] = y; sys.pos[i * 3 + 2] = 0;
+        sys.size[i] = p.size0;
+        sys.alpha[i] = p.aMax * topF * botF * figFade(x, y) * aMult;
+      }
+    } else if (pc.kind === 'frost') {
+      const frontY = iceFrontY(t);
+      for (let i = 0; i < sys.parts.length; i++) {
+        const p = sys.parts[i];
+        const tw = 0.55 + 0.45 * Math.sin(t * 2.2 + p.phase);
+        sys.pos[i * 3] = p.x; sys.pos[i * 3 + 1] = frontY + p.off; sys.pos[i * 3 + 2] = 0;
+        sys.size[i] = p.size0 * (1 + 0.6 * Math.min(1, Math.max(0, (t - 0.68) / 2.58)));
+        sys.alpha[i] = p.aMax * tw * aMult;
+      }
+    } else if (pc.kind === 'mist') {
+      const frontY = iceFrontY(t);
+      for (let i = 0; i < sys.parts.length; i++) {
+        const p = sys.parts[i];
+        const age = ((t + p.phase) % p.period + p.period) % p.period;
+        // source must still be open water: the front must not have passed it
+        const openF = Math.min(1, Math.max(0, (p.y0 - frontY) / 60));
+        const lifeF = age < p.life ? Math.sin((age / p.life) * Math.PI) : 0;
+        const y = p.y0 - p.rise * age;
+        const x = p.x0 + p.drift * age;
+        sys.pos[i * 3] = x; sys.pos[i * 3 + 1] = y; sys.pos[i * 3 + 2] = 0;
+        sys.size[i] = p.size0 * (1 + age * 0.5);
+        sys.alpha[i] = p.aMax * lifeF * openF * figFade(x, y) * aMult;
+      }
+    } else if (pc.kind === 'breath') {
+      for (let i = 0; i < sys.parts.length; i++) {
+        const p = sys.parts[i];
+        const age = t - p.tb;
+        const on = (age >= 0 && age <= pc.life) ? Math.sin((age / pc.life) * Math.PI) : 0;
+        const x = pc.origin.x + 4 * Math.max(0, age);
+        const y = pc.origin.y - 6 * Math.max(0, age);
+        sys.pos[i * 3] = x; sys.pos[i * 3 + 1] = y; sys.pos[i * 3 + 2] = 0;
+        sys.size[i] = p.size0 * (1 + Math.max(0, age) * 0.6);
+        sys.alpha[i] = p.aMax * on * aMult;
+      }
+    } else {  // dust
+      for (let i = 0; i < sys.parts.length; i++) {
+        const p = sys.parts[i];
+        let x = (p.x + p.vx * S) % W; if (x < 0) x += W;
+        let y = (p.y + p.vy * S) % H; if (y < 0) y += H;
+        sys.pos[i * 3] = x; sys.pos[i * 3 + 1] = y; sys.pos[i * 3 + 2] = 0;
+        sys.size[i] = p.size0;
+        sys.alpha[i] = p.aBase * (0.6 + 0.4 * Math.sin(t * p.breatheF + p.phase)) * aMult * figFade(x, y);
+      }
+    }
+    sys.pts.geometry.attributes.position.needsUpdate = true;
+    sys.pts.geometry.attributes.aSize.needsUpdate = true;
+    sys.pts.geometry.attributes.aAlpha.needsUpdate = true;
+  }
+
+  renderer.render(scene, camera);
+  return n;
+};
+
+window.__dbg = { systems, iceFrontY, figFade, keyVal, CFG };
+// Ready when the bg AND (if present) the FG cutout have decoded, so the
+// capture driver never renders a frame with a missing image.
+const readyPs = [bgImg.decode().catch(() => {})];
+if (fgImg) readyPs.push(fgImg.decode().catch(() => {}));
+Promise.all(readyPs).then(() => { window.__ready = true; });
+setTimeout(() => { window.__ready = true; }, 5000);
+</script>
+</body>
+</html>
