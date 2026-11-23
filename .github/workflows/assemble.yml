@@ -80,8 +80,19 @@ jobs:
           dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")
           echo "duration=$dur"
 
+      - name: Rename for artifact
+        # GitHub Artifacts rejects NTFS-unsafe chars in filenames — our
+        # deliverable names contain "?" ("What If ... Existed?.mp4").
+        # Upload under the safe job name; the hub renames it back to the
+        # deliverable name after download.
+        run: |
+          cd "jobs-assemble/${{ inputs.job }}"
+          f=$(ls *.mp4 | head -1)
+          mv "$f" "${{ inputs.job }}.mp4"
+          ls -la "${{ inputs.job }}.mp4"
+
       - uses: actions/upload-artifact@v4
         with:
           name: assemble-${{ inputs.job }}
-          path: jobs-assemble/${{ inputs.job }}/*.mp4
+          path: jobs-assemble/${{ inputs.job }}/${{ inputs.job }}.mp4
           retention-days: 30
