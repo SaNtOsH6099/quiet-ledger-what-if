@@ -27,9 +27,19 @@ jobs:
 
       - name: Check tools
         run: |
-          which ffmpeg ffprobe python3 jq unzip
+          for t in ffmpeg ffprobe python3 jq unzip; do
+            command -v $t >/dev/null 2>&1 && echo "have $t: $(command -v $t)" || echo "MISSING: $t"
+          done
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            echo "installing ffmpeg"
+            sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          fi
           ffmpeg -version | head -1
-          ls /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf || (sudo apt-get update -qq && sudo apt-get install -y -qq fonts-dejavu-core)
+          if [ ! -f /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf ]; then
+            echo "installing dejavu fonts"
+            sudo apt-get update -qq && sudo apt-get install -y -qq fonts-dejavu-core
+          fi
+          ls -la /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
 
       - name: Download frame artifacts
         env:
