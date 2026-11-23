@@ -1,0 +1,77 @@
+name: assemble-video
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Assembly job id, e.g. 21-full. Inputs must already be pushed to jobs-assemble/<job>/ : build.py, narration-norm wav, captions .ass (full cut only), cfg-manifest.json, frames.txt (one frame-artifact name per line). The frames themselves are downloaded from this repo's Actions artifacts."
+        required: true
+        type: string
+      mode:
+        description: "Cut to build: full (captioned) or clean (no karaoke captions)."
+        required: true
+        type: choice
+        options:
+          - full
+          - clean
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tools
+        run: |
+          which ffmpeg ffprobe python3 jq unzip
+          ffmpeg -version | head -1
+          ls /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf || (sudo apt-get update -qq && sudo apt-get install -y -qq fonts-dejavu-core)
+
+      - name: Download frame artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB: ${{ inputs.job }}
+        run: |
+          cd "jobs-assemble/$JOB"
+          test -f frames.txt || { echo "frames.txt missing"; exit 1; }
+          gh api "repos/SaNtOsH6099/quiet-ledger-what-if/actions/artifacts?per_page=100" > /tmp/artifacts.json
+          total=$(jq '.total_count' /tmp/artifacts.json)
+          echo "artifacts listed: $total"
+          while read -r art; do
+            [ -n "$art" ] || continue
+            id=$(jq -r ".artifacts[] | select(.name==\"$art\") | .id" /tmp/artifacts.json | head -1)
+            if [ -z "$id" ] || [ "$id" = "null" ]; then echo "artifact not found: $art"; exit 1; fi
+            echo "downloading $art (id $id)"
+            gh api "repos/SaNtOsH6099/quiet-ledger-what-if/actions/artifacts/$id/zip" > "$art.zip"
+            mkdir -p "$art"
+            unzip -q -o "$art.zip" -d "$art"
+            rm "$art.zip"
+            echo "$art: $(ls "$art"/p_*.png | wc -l) frames"
+          done < frames.txt
+
+      - name: Assemble cut
+        run: |
+          cd "jobs-assemble/${{ inputs.job }}"
+          ls
+          python3 build.py "${{ inputs.mode }}"
+
+      - name: Verify output
+        run: |
+          cd "jobs-assemble/${{ inputs.job }}"
+          f=$(ls *.mp4 | head -1)
+          echo "output: $f"
+          ls -la "$f"
+          ffprobe -v error -show_entries format=duration,size -show_entries stream=codec_name,width,height,r_frame_rate -of default=noprint_wrappers=1 "$f"
+          # moov atom must be present (ffprobe reading duration proves it)
+          dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")
+          echo "duration=$dur"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assemble-${{ inputs.job }}
+          path: jobs-assemble/${{ inputs.job }}/*.mp4
+          retention-days: 30
