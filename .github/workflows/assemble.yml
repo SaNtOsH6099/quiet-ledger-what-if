@@ -56,7 +56,15 @@ jobs:
             id=$(jq -r ".artifacts[] | select(.name==\"$art\") | .id" /tmp/artifacts.json | head -1)
             if [ -z "$id" ] || [ "$id" = "null" ]; then echo "artifact not found: $art"; exit 1; fi
             echo "downloading $art (id $id)"
-            gh api "repos/SaNtOsH6099/quiet-ledger-what-if/actions/artifacts/$id/zip" > "$art.zip"
+            # Retry: concurrent batch assemblies hit transient 503s from the
+            # artifact API (26-full failed on the first download, 2026-11-24).
+            ok=0
+            for attempt in 1 2 3 4 5; do
+              if gh api "repos/SaNtOsH6099/quiet-ledger-what-if/actions/artifacts/$id/zip" > "$art.zip" && [ -s "$art.zip" ]; then ok=1; break; fi
+              echo "download attempt $attempt failed for $art — retrying in 30s"
+              sleep 30
+            done
+            [ "$ok" = "1" ] || { echo "download failed after 5 attempts: $art"; exit 1; }
             mkdir -p "$art"
             unzip -q -o "$art.zip" -d "$art"
             rm "$art.zip"
