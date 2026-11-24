@@ -149,7 +149,9 @@ def build_filtergraph(ass_path=None):
     filters = []
     for i, (st, d, sn, key) in enumerate(ITEMS):
         pad = item_pad(i)
-        tpad = f",tpad=stop_duration={pad:.3f}" if pad > 0 else ""
+        tpad = f",tpad=stop_duration={pad:.3f}:stop_mode=clone" if pad > 0 else ""
+        # stop_mode=clone is REQUIRED: tpad's default stop_mode=add appends
+        # BLACK frames for the pad (26 v2: 7 holes, 27 v2: 4, 22 v1: 7).
         filters.append(f"[{i}:v]format=yuv420p,settb=AVTB{tpad}[v{i}]")
     prev = "v0"
     for i in range(1, len(ITEMS)):
