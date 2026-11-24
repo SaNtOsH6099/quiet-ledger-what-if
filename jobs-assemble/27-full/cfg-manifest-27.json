@@ -1,0 +1,138 @@
+{
+ "27-01a": {
+  "frames": 82,
+  "start": 0.0,
+  "span": 2.4,
+  "particles": 2,
+  "glows": 0,
+  "figure": false
+ },
+ "27-01b": {
+  "frames": 82,
+  "start": 2.4,
+  "span": 2.4,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "27-01c": {
+  "frames": 81,
+  "start": 4.8,
+  "span": 2.36,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "27-02a": {
+  "frames": 84,
+  "start": 8.04,
+  "span": 2.46,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "27-02b": {
+  "frames": 64,
+  "start": 10.5,
+  "span": 1.8,
+  "particles": 2,
+  "glows": 1,
+  "figure": false
+ },
+ "27-02c": {
+  "frames": 71,
+  "start": 12.3,
+  "span": 2.03,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "27-03a": {
+  "frames": 96,
+  "start": 14.33,
+  "span": 2.87,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "27-03b": {
+  "frames": 88,
+  "start": 17.2,
+  "span": 2.6,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "27-03c": {
+  "frames": 76,
+  "start": 19.8,
+  "span": 2.19,
+  "particles": 2,
+  "glows": 1,
+  "figure": false
+ },
+ "27-04a": {
+  "frames": 110,
+  "start": 22.65,
+  "span": 3.35,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "27-04b": {
+  "frames": 118,
+  "start": 26.0,
+  "span": 3.61,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "27-05a": {
+  "frames": 112,
+  "start": 29.61,
+  "span": 3.39,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "27-05b": {
+  "frames": 88,
+  "start": 33.0,
+  "span": 2.6,
+  "particles": 2,
+  "glows": 0,
+  "figure": false
+ },
+ "27-05c": {
+  "frames": 79,
+  "start": 35.6,
+  "span": 2.3,
+  "particles": 2,
+  "glows": 1,
+  "figure": false
+ },
+ "27-06a": {
+  "frames": 107,
+  "start": 38.76,
+  "span": 3.24,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "27-06b": {
+  "frames": 100,
+  "start": 42.0,
+  "span": 3.0,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "27-06c": {
+  "frames": 78,
+  "start": 45.0,
+  "span": 2.28,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ }
+}
