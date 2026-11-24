@@ -19,10 +19,12 @@ Adapted from build_21.py (short-20-chopsticks) + build_13.py cards.
   y=1600 below the caption band, on BOTH cuts):
   02a "Strong, Maine — the Toothpick Capital of the World",
   02b "75 billion toothpicks a year, from a town of 1,000 people — after WWII"
-      (two lines — 70 chars will not fit one line at 36px),
+      (two lines — 70 chars will not fit one line at 36px — rendered as TWO
+      single-line drawtext filters; the runner's ffmpeg renders a tofu box
+      at a multi-line textfile's line break),
   04a "El Sidrón, Spain — 49,000 years ago",
   07a "1869 — one minute of machine work = one day of whittling"
-      (two lines — 58 chars will not fit one line at 36px),
+      (two lines — 58 chars will not fit one line at 36px — same split).
   08a "Last Maine toothpick factory closed, 2003".
   TPAD IS NEEDED (16 v1 lesson): the capture gives each item
   span*30+10 frames, but the xfade needs item i to last until the NEXT
@@ -85,20 +87,28 @@ CARDS = [
     (34.30, 36.60, "card-07a"),
     (39.90, 42.20, "card-08a"),
 ]
+# Single-line card texts ONLY — the runner's ffmpeg 8.0.1-3ubuntu2 renders a
+# tofu box at the line break of a multi-line drawtext textfile (proven on
+# 26-clean: boxes after "year," and "work"), while single-line cards render
+# clean (02a/04a/08a). Local ffmpeg 8.1.2 does NOT reproduce it. Two-line
+# cards are therefore two separate single-line drawtext filters.
 CARD_TEXT = {
     "card-02a": "Strong, Maine \u2014 the Toothpick Capital of the World",
-    "card-02b": "75 billion toothpicks a year,\nfrom a town of 1,000 people \u2014 after WWII",
+    "card-02b-1": "75 billion toothpicks a year,",
+    "card-02b-2": "from a town of 1,000 people \u2014 after WWII",
     "card-04a": "El Sidr\u00f3n, Spain \u2014 49,000 years ago",
-    "card-07a": "1869 \u2014 one minute of machine work\n= one day of whittling",
+    "card-07a-1": "1869 \u2014 one minute of machine work",
+    "card-07a-2": "= one day of whittling",
     "card-08a": "Last Maine toothpick factory closed, 2003",
 }
-# y position per card (two-line cards sit higher so the block stays in place)
-CARD_Y = {
-    "card-02a": 1600,
-    "card-02b": 1560,
-    "card-04a": 1600,
-    "card-07a": 1560,
-    "card-08a": 1600,
+# card_id -> [(text_id, y), ...]; two-line cards sit at 1560/1605 so the
+# block occupies the same band as the old multi-line card (y=1560).
+CARD_LINES = {
+    "card-02a": [("card-02a", 1600)],
+    "card-02b": [("card-02b-1", 1560), ("card-02b-2", 1605)],
+    "card-04a": [("card-04a", 1600)],
+    "card-07a": [("card-07a-1", 1560), ("card-07a-2", 1605)],
+    "card-08a": [("card-08a", 1600)],
 }
 
 
@@ -112,17 +122,22 @@ def write_cards():
 
 
 def card_filter(inp, out, card_dir):
-    """Append the drawtext card filters to the chain. Returns final label."""
+    """Append the drawtext card filters to the chain. One filter per line
+    (single-line textfiles only — see CARD_TEXT note). Returns final label."""
     cur = inp
-    for i, (st, en, cid) in enumerate(CARDS):
-        nxt = f"card{i}" if i < len(CARDS) - 1 else out
-        tf = os.path.join(card_dir, cid + ".txt")
-        cur_f = (f"[{cur}]drawtext=fontfile={FONT}:textfile={tf}:"
-                 f"fontsize=36:fontcolor=white:borderw=2:bordercolor=black:"
-                 f"x=(w-text_w)/2:y={CARD_Y[cid]}:"
-                 f"enable='between(t,{st},{en})'[{nxt}]")
-        cur = nxt
-        yield cur_f
+    n = 0
+    total = sum(len(CARD_LINES[cid]) for _, _, cid in CARDS)
+    for st, en, cid in CARDS:
+        for tid, y in CARD_LINES[cid]:
+            n += 1
+            nxt = f"card{n}" if n < total else out
+            tf = os.path.join(card_dir, tid + ".txt")
+            cur_f = (f"[{cur}]drawtext=fontfile={FONT}:textfile={tf}:"
+                     f"fontsize=36:fontcolor=white:borderw=2:bordercolor=black:"
+                     f"x=(w-text_w)/2:y={y}:"
+                     f"enable='between(t,{st},{en})'[{nxt}]")
+            cur = nxt
+            yield cur_f
 
 
 def ass_time(t):
