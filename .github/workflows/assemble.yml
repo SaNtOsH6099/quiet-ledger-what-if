@@ -48,12 +48,26 @@ jobs:
         run: |
           cd "jobs-assemble/$JOB"
           test -f frames.txt || { echo "frames.txt missing"; exit 1; }
-          gh api "repos/SaNtOsH6099/quiet-ledger-what-if/actions/artifacts?per_page=100" > /tmp/artifacts.json
-          total=$(jq '.total_count' /tmp/artifacts.json)
+          # Paginate the artifact list (repo holds 173+ artifacts; a single
+          # per_page=100 call misses anything past page 1 — 27's flag,
+          # 2026-11-24). The API returns newest first, so the first match
+          # per name is the newest artifact.
+          : > /tmp/artifacts_all.jsonl
+          page=1
+          while true; do
+            gh api "repos/SaNtOsH6099/quiet-ledger-what-if/actions/artifacts?per_page=100&page=$page" > /tmp/artifacts_page.json
+            count=$(jq '.artifacts | length' /tmp/artifacts_page.json)
+            [ "$count" = "0" ] && break
+            jq -c '.artifacts[]' /tmp/artifacts_page.json >> /tmp/artifacts_all.jsonl
+            echo "page $page: $count artifacts"
+            page=$((page+1))
+            [ "$page" -gt 10 ] && break
+          done
+          total=$(wc -l < /tmp/artifacts_all.jsonl)
           echo "artifacts listed: $total"
           while read -r art; do
             [ -n "$art" ] || continue
-            id=$(jq -r ".artifacts[] | select(.name==\"$art\") | .id" /tmp/artifacts.json | head -1)
+            id=$(jq -r -s ".[] | select(.name==\"$art\") | .id" /tmp/artifacts_all.jsonl | head -1)
             if [ -z "$id" ] || [ "$id" = "null" ]; then echo "artifact not found: $art"; exit 1; fi
             echo "downloading $art (id $id)"
             # Retry: concurrent batch assemblies hit transient 503s from the
