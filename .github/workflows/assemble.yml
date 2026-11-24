@@ -55,7 +55,15 @@ jobs:
           : > /tmp/artifacts_all.jsonl
           page=1
           while true; do
-            gh api "repos/SaNtOsH6099/quiet-ledger-what-if/actions/artifacts?per_page=100&page=$page" > /tmp/artifacts_page.json
+            # Retry the listing call: transient 503s from the artifact API
+            # killed runs before (24-full, 2026-11-24).
+            ok=0
+            for attempt in 1 2 3; do
+              if gh api "repos/SaNtOsH6099/quiet-ledger-what-if/actions/artifacts?per_page=100&page=$page" > /tmp/artifacts_page.json && jq -e '.artifacts' /tmp/artifacts_page.json >/dev/null; then ok=1; break; fi
+              echo "artifact list page $page attempt $attempt failed — retrying in 15s"
+              sleep 15
+            done
+            [ "$ok" = "1" ] || { echo "artifact list failed after 3 attempts (page $page)"; exit 1; }
             count=$(jq '.artifacts | length' /tmp/artifacts_page.json)
             [ "$count" = "0" ] && break
             jq -c '.artifacts[]' /tmp/artifacts_page.json >> /tmp/artifacts_all.jsonl
