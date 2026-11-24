@@ -1,0 +1,37 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Kara,DejaVu Sans,80,&H004DD3FF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,1,0,1,3,2,5,60,60,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.05,0:00:01.79,Kara,,0,0,0,,{\kf10}what {\kf10}if {\kf65}toothpicks\N {\kf14}never {\kf75}existed,
+Dialogue: 0,0:00:02.21,0:00:03.38,Kara,,0,0,0,,{\kf10}no {\kf15}pick {\kf25}after\N {\kf17}your {\kf50}meal,
+Dialogue: 0,0:00:03.85,0:00:05.17,Kara,,0,0,0,,{\kf10}food {\kf26}stuck {\kf27}between\N {\kf28}your {\kf41}teeth,
+Dialogue: 0,0:00:05.88,0:00:08.16,Kara,,0,0,0,,{\kf10}one {\kf22}maine {\kf42}town {\kf36}of\N {\kf54}1,000 {\kf39}people {\kf25}lived
+Dialogue: 0,0:00:08.16,0:00:09.23,Kara,,0,0,0,,{\kf30}by {\kf12}the {\kf65}toothpick,
+Dialogue: 0,0:00:09.66,0:00:11.18,Kara,,0,0,0,,{\kf26}75 {\kf54}billion {\kf26}a {\kf46}year,
+Dialogue: 0,0:00:11.61,0:00:12.83,Kara,,0,0,0,,{\kf10}you {\kf10}would {\kf10}have {\kf10}to\N {\kf21}whittle {\kf20}your {\kf41}own,
+Dialogue: 0,0:00:13.35,0:00:14.55,Kara,,0,0,0,,{\kf10}but {\kf10}the {\kf13}habit\N {\kf26}is {\kf61}older,
+Dialogue: 0,0:00:15.29,0:00:16.67,Kara,,0,0,0,,{\kf65}49,000 {\kf18}years {\kf55}ago,
+Dialogue: 0,0:00:17.19,0:00:18.67,Kara,,0,0,0,,{\kf47}neanderthals {\kf16}were\N {\kf20}picking {\kf26}their {\kf39}teeth,
+Dialogue: 0,0:00:19.14,0:00:19.89,Kara,,0,0,0,,{\kf10}just {\kf20}like {\kf45}you,
+Dialogue: 0,0:00:20.27,0:00:22.01,Kara,,0,0,0,,{\kf10}in {\kf10}the {\kf96}1500s\N {\kf24}portuguese {\kf34}nuns
+Dialogue: 0,0:00:22.01,0:00:24.43,Kara,,0,0,0,,{\kf54}sold {\kf66}orangewood\N {\kf24}picks {\kf31}with {\kf67}sweets,
+Dialogue: 0,0:00:24.89,0:00:27.07,Kara,,0,0,0,,{\kf10}a {\kf21}boston {\kf59}man,\N{\kf33} {\kf16}charles {\kf79}forster,
+Dialogue: 0,0:00:27.39,0:00:28.38,Kara,,0,0,0,,{\kf10}saw {\kf19}those\N {\kf26}picks {\kf26}in {\kf18}brazil,
+Dialogue: 0,0:00:28.38,0:00:31.01,Kara,,0,0,0,,{\kf38}paid{\kf45} {\kf37}strangers {\kf45}to\N {\kf21}ask {\kf20}for {\kf57}toothpicks
+Dialogue: 0,0:00:31.01,0:00:31.82,Kara,,0,0,0,,{\kf10}in {\kf71}restaurants,
+Dialogue: 0,0:00:32.30,0:00:33.55,Kara,,0,0,0,,{\kf10}so {\kf19}restaurants\N {\kf54}stocked {\kf43}them,
+Dialogue: 0,0:00:34.04,0:00:36.58,Kara,,0,0,0,,{\kf10}in {\kf103}1869,{\kf47} {\kf10}his\N {\kf29}machine {\kf37}made {\kf18}in
+Dialogue: 0,0:00:36.58,0:00:38.71,Kara,,0,0,0,,{\kf23}one {\kf40}minute {\kf15}what{\kf35} {\kf10}a\N {\kf36}whittler {\kf26}made {\kf17}in {\kf11}a
+Dialogue: 0,0:00:38.71,0:00:41.62,Kara,,0,0,0,,{\kf49}day,{\kf51} {\kf10}the {\kf10}last {\kf35}maine\N {\kf49}factory {\kf87}closed,
+Dialogue: 0,0:00:42.03,0:00:43.10,Kara,,0,0,0,,{\kf10}yet {\kf10}the {\kf31}smallest\N {\kf35}thing {\kf10}in {\kf11}your
+Dialogue: 0,0:00:43.10,0:00:46.18,Kara,,0,0,0,,{\kf33}drawer {\kf27}is{\kf36} {\kf117}49,000\N {\kf20}years {\kf20}of {\kf55}habit,
+Dialogue: 0,0:00:46.59,0:00:47.96,Kara,,0,0,0,,{\kf10}waiting {\kf30}after\N {\kf48}every {\kf50}meal.
