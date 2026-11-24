@@ -26,10 +26,14 @@ Adapted from build_21.py (short-20-chopsticks).
   06a "one side flat, one side wavy — the waves grip".
   Card widths measured with PIL at 36px (DejaVuSans): 02c 1292px,
   03a 1410px, 04a 1874px, 05a 1492px — all too wide for one 1080px
-  line, so those four are split into TWO lines in the textfile
-  (drawtext renders the newline; block stays centred, max line 959px).
+  line, so those four are split into TWO lines (drawtext renders the
+  newline; block stays centred, max line 959px).
   02a 639px and 06a 828px stay one line. Kirby card MUST land at the
   02c beat (load-bearing); do NOT stretch 03b.
+  v1 DEFECT (found at Gate 5 frame QC, fixed in v2): a newline inside
+  one drawtext textfile renders a TOFU BOX at the end of the first
+  line (all four two-line cards) — the fix is one drawtext filter PER
+  LINE (y=1600 + 45*line), never a newline inside a textfile.
   TPAD IS NEEDED (16 v1 lesson): the capture gives each item
   span*30+10 frames, but the xfade needs item i to last until the NEXT
   item's start + 0.25s, and the sentence-boundary silences leave gaps.
@@ -92,36 +96,49 @@ CARDS = [
     (38.95, 41.90, "card-06a"),
 ]
 CARD_TEXT = {
-    "card-02a": "hairpins ~5500 BC, Hemudu, China",
-    "card-02c": "Kirby, Beard & Co., Birmingham, by\n1853 \u2014 in Britain still the kirby grip",
-    "card-03a": "Irene Castle, 1914 \u2014 the Castle bob\n(reportedly 20,000 women a week, 1915)",
-    "card-04a": "Luis Marcus, San Francisco, after WWI \u2014 two pins,\n35 cents; named for the bob, the short 1920s haircut",
-    "card-05a": "Veronica Lake, 1943 \u2014 U.S. government\nasked her to pin back her peek-a-boo hair",
-    "card-06a": "one side flat, one side wavy \u2014 the waves grip",
+    "card-02a": ["hairpins ~5500 BC, Hemudu, China"],
+    "card-02c": ["Kirby, Beard & Co., Birmingham, by",
+                 "1853 \u2014 in Britain still the kirby grip"],
+    "card-03a": ["Irene Castle, 1914 \u2014 the Castle bob",
+                 "(reportedly 20,000 women a week, 1915)"],
+    "card-04a": ["Luis Marcus, San Francisco, after WWI \u2014 two pins,",
+                 "35 cents; named for the bob, the short 1920s haircut"],
+    "card-05a": ["Veronica Lake, 1943 \u2014 U.S. government",
+                 "asked her to pin back her peek-a-boo hair"],
+    "card-06a": ["one side flat, one side wavy \u2014 the waves grip"],
 }
 
 
 def write_cards():
     d = os.path.join(BASE, "cards")
     os.makedirs(d, exist_ok=True)
-    for cid, text in CARD_TEXT.items():
-        p = os.path.join(d, cid + ".txt")
-        open(p, "w").write(text + "\n")
+    for cid, lines in CARD_TEXT.items():
+        for li, text in enumerate(lines):
+            p = os.path.join(d, f"{cid}-{li}.txt")
+            open(p, "w").write(text + "\n")
     return d
 
 
 def card_filter(inp, out, card_dir):
-    """Append the drawtext card filters to the chain. Returns final label."""
+    """Append the drawtext card filters to the chain. Returns final label.
+    Each card line gets its OWN drawtext (y=1600 + 45*line) — a newline
+    inside one textfile renders a tofu box at the end of the line, so
+    multi-line cards are never one textfile (v1 defect, fixed here)."""
     cur = inp
+    filters = []
     for i, (st, en, cid) in enumerate(CARDS):
-        nxt = f"card{i}" if i < len(CARDS) - 1 else out
-        tf = os.path.join(card_dir, cid + ".txt")
-        cur_f = (f"[{cur}]drawtext=fontfile={FONT}:textfile={tf}:"
-                 f"fontsize=36:fontcolor=white:borderw=2:bordercolor=black:"
-                 f"x=(w-text_w)/2:y=1600:"
-                 f"enable='between(t,{st},{en})'[{nxt}]")
-        cur = nxt
-        yield cur_f
+        for li in range(len(CARD_TEXT[cid])):
+            is_last = (i == len(CARDS) - 1 and li == len(CARD_TEXT[cid]) - 1)
+            nxt = out if is_last else f"card{i}_{li}"
+            tf = os.path.join(card_dir, f"{cid}-{li}.txt")
+            y = 1600 + 45 * li
+            filters.append(
+                f"[{cur}]drawtext=fontfile={FONT}:textfile={tf}:"
+                f"fontsize=36:fontcolor=white:borderw=2:bordercolor=black:"
+                f"x=(w-text_w)/2:y={y}:"
+                f"enable='between(t,{st},{en})'[{nxt}]")
+            cur = nxt
+    return filters
 
 
 def ass_time(t):
