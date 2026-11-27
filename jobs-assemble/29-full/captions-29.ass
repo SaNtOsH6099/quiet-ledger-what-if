@@ -1,0 +1,41 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Kara,DejaVu Sans,80,&H004DD3FF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,1,0,1,3,2,5,60,60,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.05,0:00:01.80,Kara,,0,0,0,,{\kf10}your {\kf16}fork {\kf23}was {\kf20}once\N {\kf36}called {\kf24}the {\kf46}devil's
+Dialogue: 0,0:00:01.80,0:00:04.30,Kara,,0,0,0,,{\kf48}tool,{\kf48} {\kf10}a {\kf15}princess\N {\kf36}died {\kf32}for {\kf28}using {\kf34}it.
+Dialogue: 0,0:00:04.91,0:00:06.41,Kara,,0,0,0,,{\kf10}byzantine {\kf36}nobles\N {\kf42}ate {\kf23}with {\kf39}personal
+Dialogue: 0,0:00:06.41,0:00:08.48,Kara,,0,0,0,,{\kf74}forks,{\kf40} {\kf10}persian\N {\kf19}courts {\kf64}too,
+Dialogue: 0,0:00:08.95,0:00:10.14,Kara,,0,0,0,,{\kf10}yet {\kf10}the {\kf10}rest {\kf18}of\N {\kf20}europe {\kf27}ate {\kf25}by
+Dialogue: 0,0:00:10.14,0:00:12.19,Kara,,0,0,0,,{\kf53}hand.{\kf42} {\kf10}in {\kf99}1004,
+Dialogue: 0,0:00:12.56,0:00:14.34,Kara,,0,0,0,,{\kf10}a {\kf16}princess {\kf42}named\N {\kf30}maria {\kf62}arrived {\kf18}in
+Dialogue: 0,0:00:14.34,0:00:15.43,Kara,,0,0,0,,{\kf18}venice {\kf35}for\N {\kf10}her {\kf46}wedding,
+Dialogue: 0,0:00:15.90,0:00:17.78,Kara,,0,0,0,,{\kf18}carrying {\kf32}golden\N {\kf83}forks,{\kf34} {\kf10}she {\kf11}ate
+Dialogue: 0,0:00:17.78,0:00:18.99,Kara,,0,0,0,,{\kf22}with {\kf20}one {\kf14}at\N {\kf11}the {\kf54}feast,
+Dialogue: 0,0:00:19.36,0:00:21.14,Kara,,0,0,0,,{\kf10}horrifying {\kf44}the\N {\kf57}clergy,{\kf43} {\kf10}one {\kf14}priest
+Dialogue: 0,0:00:21.14,0:00:23.16,Kara,,0,0,0,,{\kf36}declared {\kf32}that {\kf22}god\N {\kf34}gave {\kf28}man {\kf50}natural
+Dialogue: 0,0:00:23.16,0:00:24.92,Kara,,0,0,0,,{\kf72}forks,{\kf33} {\kf10}his {\kf61}fingers,
+Dialogue: 0,0:00:25.18,0:00:26.55,Kara,,0,0,0,,{\kf18}metal {\kf49}ones,\N {\kf21}insulted {\kf49}him.
+Dialogue: 0,0:00:26.96,0:00:27.71,Kara,,0,0,0,,{\kf10}2 {\kf14}years {\kf50}later,
+Dialogue: 0,0:00:28.12,0:00:30.54,Kara,,0,0,0,,{\kf14}plague {\kf34}swept\N {\kf75}venice,{\kf42} {\kf10}maria {\kf67}died,
+Dialogue: 0,0:00:30.98,0:00:32.44,Kara,,0,0,0,,{\kf10}a {\kf10}monk {\kf44}called {\kf14}it\N {\kf42}god's {\kf26}punishment
+Dialogue: 0,0:00:32.44,0:00:33.48,Kara,,0,0,0,,{\kf41}for {\kf11}her {\kf52}vanity,
+Dialogue: 0,0:00:33.95,0:00:35.81,Kara,,0,0,0,,{\kf19}europe {\kf54}shunned\N {\kf12}the {\kf18}fork {\kf27}for{\kf24} {\kf32}400
+Dialogue: 0,0:00:35.81,0:00:38.16,Kara,,0,0,0,,{\kf79}years.{\kf43} {\kf10}then\N {\kf21}sticky {\kf82}sweets,
+Dialogue: 0,0:00:38.42,0:00:39.43,Kara,,0,0,0,,{\kf14}slippery {\kf87}pasta,
+Dialogue: 0,0:00:39.84,0:00:41.29,Kara,,0,0,0,,{\kf10}italy {\kf32}needed\N {\kf31}something {\kf72}cleaner,
+Dialogue: 0,0:00:41.72,0:00:42.68,Kara,,0,0,0,,{\kf10}the {\kf10}fork {\kf76}returned,
+Dialogue: 0,0:00:43.11,0:00:44.22,Kara,,0,0,0,,{\kf10}by {\kf10}the\N {\kf41}15th {\kf50}century,
+Dialogue: 0,0:00:44.66,0:00:46.38,Kara,,0,0,0,,{\kf10}the {\kf11}fork {\kf28}was {\kf24}good\N {\kf26}manners {\kf34}in {\kf39}italy.
+Dialogue: 0,0:00:46.88,0:00:48.16,Kara,,0,0,0,,{\kf10}the {\kf31}devil's {\kf16}tool\N {\kf40}became {\kf32}good
+Dialogue: 0,0:00:48.16,0:00:50.04,Kara,,0,0,0,,{\kf68}manners,{\kf41} {\kf10}the {\kf10}fork\N {\kf25}you {\kf15}picked {\kf19}up
+Dialogue: 0,0:00:50.04,0:00:51.33,Kara,,0,0,0,,{\kf36}today {\kf24}without\N {\kf22}a {\kf47}thought.
