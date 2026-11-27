@@ -1,0 +1,41 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Kara,DejaVu Sans,80,&H004DD3FF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,1,0,1,3,2,5,60,60,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.07,0:00:01.83,Kara,,0,0,0,,{\kf10}for {\kf82}4,300 {\kf85}years,
+Dialogue: 0,0:00:02.06,0:00:03.76,Kara,,0,0,0,,{\kf13}riders {\kf31}had {\kf21}nowhere\N {\kf25}to {\kf17}put {\kf15}their {\kf48}feet,
+Dialogue: 0,0:00:04.18,0:00:06.45,Kara,,0,0,0,,{\kf34}assyrian {\kf24}riders\N {\kf42}sat {\kf20}on {\kf26}cloth {\kf81}pads,
+Dialogue: 0,0:00:06.82,0:00:08.14,Kara,,0,0,0,,{\kf13}roman {\kf27}cavalry\N {\kf65}fought {\kf27}whole
+Dialogue: 0,0:00:08.14,0:00:10.85,Kara,,0,0,0,,{\kf92}empires{\kf29} {\kf10}without\N {\kf34}one {\kf26}loop {\kf24}for {\kf10}a {\kf46}foot,
+Dialogue: 0,0:00:11.26,0:00:14.00,Kara,,0,0,0,,{\kf36}then, {\kf20}in {\kf57}china,\N{\kf40} {\kf10}in {\kf10}the {\kf10}year {\kf91}302,
+Dialogue: 0,0:00:14.44,0:00:16.06,Kara,,0,0,0,,{\kf10}a {\kf12}tomb {\kf32}rider {\kf34}near\N {\kf60}changsha {\kf14}shows
+Dialogue: 0,0:00:16.45,0:00:18.46,Kara,,0,0,0,,{\kf31}one {\kf30}loop, {\kf20}a{\kf25} {\kf23}step\N {\kf23}to {\kf18}climb {\kf32}on,
+Dialogue: 0,0:00:18.46,0:00:21.54,Kara,,0,0,0,,{\kf15}by{\kf42} {\kf123}322,\N{\kf44} {\kf10}near {\kf73}nanjing,
+Dialogue: 0,0:00:21.98,0:00:23.20,Kara,,0,0,0,,{\kf10}a {\kf13}tomb {\kf38}shows {\kf61}two,
+Dialogue: 0,0:00:23.57,0:00:26.27,Kara,,0,0,0,,{\kf10}one {\kf13}on {\kf16}each {\kf62}side,\N{\kf39} {\kf10}by {\kf10}the {\kf110}400s,
+Dialogue: 0,0:00:26.53,0:00:28.91,Kara,,0,0,0,,{\kf10}they {\kf10}were {\kf23}common,\N {\kf22}in{\kf43} {\kf10}the {\kf120}560s,
+Dialogue: 0,0:00:28.91,0:00:31.02,Kara,,0,0,0,,{\kf10}avar{\kf61} {\kf49}horsemen\N {\kf30}carried {\kf38}iron {\kf24}ones
+Dialogue: 0,0:00:31.02,0:00:31.76,Kara,,0,0,0,,{\kf30}into {\kf44}europe,
+Dialogue: 0,0:00:32.30,0:00:33.60,Kara,,0,0,0,,{\kf10}now {\kf10}a {\kf21}rider\N {\kf28}could {\kf61}brace,
+Dialogue: 0,0:00:33.87,0:00:34.74,Kara,,0,0,0,,{\kf14}swing {\kf14}a {\kf59}sword,
+Dialogue: 0,0:00:35.05,0:00:36.85,Kara,,0,0,0,,{\kf12}shoot {\kf15}a {\kf45}bow,\N{\kf34} {\kf10}without {\kf64}falling,
+Dialogue: 0,0:00:37.09,0:00:39.34,Kara,,0,0,0,,{\kf10}feet {\kf58}planted,\N{\kf33} {\kf10}in {\kf114}1962,
+Dialogue: 0,0:00:39.80,0:00:41.57,Kara,,0,0,0,,{\kf10}a {\kf18}historian {\kf60}argued\N {\kf25}that {\kf24}loop {\kf40}built
+Dialogue: 0,0:00:41.57,0:00:43.72,Kara,,0,0,0,,{\kf80}feudalism,{\kf48} {\kf10}the\N {\kf19}lance {\kf31}tucked {\kf27}under
+Dialogue: 0,0:00:43.72,0:00:45.80,Kara,,0,0,0,,{\kf22}the {\kf46}arm,{\kf42} {\kf10}land\N {\kf27}for {\kf61}knights,
+Dialogue: 0,0:00:46.18,0:00:48.26,Kara,,0,0,0,,{\kf39}historians {\kf29}pushed\N {\kf50}back,{\kf50} {\kf11}romans {\kf30}had
+Dialogue: 0,0:00:48.26,0:00:49.82,Kara,,0,0,0,,{\kf20}fought {\kf30}well {\kf27}for\N {\kf23}centuries {\kf56}without
+Dialogue: 0,0:00:49.82,0:00:51.55,Kara,,0,0,0,,{\kf33}it,{\kf40} {\kf10}the {\kf29}couched\N {\kf32}lance {\kf28}came
+Dialogue: 0,0:00:51.55,0:00:52.68,Kara,,0,0,0,,{\kf34}centuries {\kf79}later,
+Dialogue: 0,0:00:53.16,0:00:55.27,Kara,,0,0,0,,{\kf80}4,300 {\kf50}years\N {\kf24}without {\kf18}a {\kf38}loop,
+Dialogue: 0,0:00:55.73,0:00:57.19,Kara,,0,0,0,,{\kf10}more {\kf11}than {\kf32}60\N {\kf42}years {\kf16}of {\kf34}historians
+Dialogue: 0,0:00:57.19,0:00:58.39,Kara,,0,0,0,,{\kf44}arguing {\kf52}over {\kf24}it.
