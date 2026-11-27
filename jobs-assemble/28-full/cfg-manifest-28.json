@@ -1,0 +1,146 @@
+{
+ "28-01a": {
+  "frames": 82,
+  "start": 0.0,
+  "span": 2.4,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-01b": {
+  "frames": 82,
+  "start": 2.4,
+  "span": 2.4,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-01c": {
+  "frames": 75,
+  "start": 4.8,
+  "span": 2.18,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-02a": {
+  "frames": 66,
+  "start": 7.54,
+  "span": 1.86,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-02b": {
+  "frames": 64,
+  "start": 9.4,
+  "span": 1.8,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-03a": {
+  "frames": 87,
+  "start": 11.84,
+  "span": 2.56,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-03b": {
+  "frames": 94,
+  "start": 14.4,
+  "span": 2.8,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-04a": {
+  "frames": 87,
+  "start": 17.82,
+  "span": 2.58,
+  "particles": 2,
+  "glows": 0,
+  "figure": false
+ },
+ "28-04b": {
+  "frames": 94,
+  "start": 20.4,
+  "span": 2.8,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-04c": {
+  "frames": 87,
+  "start": 23.2,
+  "span": 2.56,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-05a": {
+  "frames": 68,
+  "start": 26.28,
+  "span": 1.92,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-05b": {
+  "frames": 65,
+  "start": 28.2,
+  "span": 1.84,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-06a": {
+  "frames": 89,
+  "start": 30.58,
+  "span": 2.62,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-06b": {
+  "frames": 91,
+  "start": 33.2,
+  "span": 2.7,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-06c": {
+  "frames": 81,
+  "start": 35.9,
+  "span": 2.38,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-07a": {
+  "frames": 91,
+  "start": 38.8,
+  "span": 2.7,
+  "particles": 1,
+  "glows": 1,
+  "figure": false
+ },
+ "28-07b": {
+  "frames": 94,
+  "start": 41.5,
+  "span": 2.8,
+  "particles": 1,
+  "glows": 0,
+  "figure": false
+ },
+ "28-07c": {
+  "frames": 121,
+  "start": 44.3,
+  "span": 3.7,
+  "particles": 2,
+  "glows": 0,
+  "figure": false
+ }
+}
